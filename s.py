@@ -1,12 +1,24 @@
 import os
-from dotenv import load_dotenv
+import time
 import telebot
 from openai import OpenAI
 
-load_dotenv()
+# ==============================
+# 🔐 Переменные окружения
+# ==============================
 
 TG_TOKEN = os.getenv("TG_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+if not TG_TOKEN:
+    raise ValueError("TG_TOKEN не найден в переменных окружения")
+
+if not OPENROUTER_API_KEY:
+    raise ValueError("OPENROUTER_API_KEY не найден в переменных окружения")
+
+# ==============================
+# 🤖 Инициализация
+# ==============================
 
 bot = telebot.TeleBot(TG_TOKEN)
 
@@ -15,34 +27,25 @@ client = OpenAI(
     api_key=OPENROUTER_API_KEY,
 )
 
+# ==============================
 # 🧠 Память пользователей
+# ==============================
+
 user_memory = {}
 
 SYSTEM_PROMPT = {
     "role": "system",
-    "content": "Ты полезный, дружелюбный Telegram-бот. Отвечай понятно и по делу."
+    "content": "Ты полезный, дружелюбный Telegram-бот. Отвечай кратко и понятно."
 }
 
-MAX_HISTORY = 10  # сколько последних сообщений хранить
+MAX_HISTORY = 10
 
+
+# ==============================
+# 🔄 Команда /start
+# ==============================
 
 @bot.message_handler(commands=['start'])
-def start_message(message):
-    user_id = message.from_user.id
-    
-    # очищаем память при старте
-    user_memory[user_id] = [SYSTEM_PROMPT]
-
-    bot.reply_to(
-        message,
-        "Привет! 👋\n\n"
-        "Я — ИИ-Telegram-бот Mikcha 🤖\n"
-        "Я могу помочь с домашней работой или просто ответить на твой вопрос)\n\n"
-        "Напиши мне что-нибудь 😊"
-    )
-
-
-@bot.message_handler(commands=['reset'])
 def start_message(message):
     user_id = message.from_user.id
     user_memory[user_id] = [SYSTEM_PROMPT]
@@ -50,11 +53,14 @@ def start_message(message):
     bot.send_message(
         message.chat.id,
         "🔄 Диалог перезапущен.\n"
-        "Контекст очищен.\n\n"
-        "Чем могу помочь?"
+        "Память очищена 🧠\n\n"
+        "Напиши мне что-нибудь 😊"
     )
 
 
+# ==============================
+# 💬 Обработка сообщений
+# ==============================
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
@@ -62,44 +68,57 @@ def handle_message(message):
     user_text = message.text
 
     try:
-        # если пользователь новый
         if user_id not in user_memory:
             user_memory[user_id] = [SYSTEM_PROMPT]
 
-        # добавляем сообщение пользователя
+        # Добавляем сообщение пользователя
         user_memory[user_id].append({
             "role": "user",
             "content": user_text
         })
 
-        # ограничиваем длину истории
+        # Ограничиваем историю
         user_memory[user_id] = (
             [SYSTEM_PROMPT] +
             user_memory[user_id][-MAX_HISTORY:]
         )
 
         response = client.chat.completions.create(
-            model="google/gemma-2-9b-it",
-            messages=user_memory[user_id]
+            model="openai/gpt-3.5-turbo",
+            messages=user_memory[user_id],
         )
-
-        if not response or not response.choices:
-            bot.reply_to(message, "Ошибка: пустой ответ от модели.")
-            return
 
         answer = response.choices[0].message.content
 
-        # добавляем ответ модели в память
+        # Сохраняем ответ
         user_memory[user_id].append({
             "role": "assistant",
             "content": answer
         })
 
-        bot.reply_to(message, answer)
+        bot.send_message(message.chat.id, answer)
 
     except Exception as e:
-        bot.reply_to(message, f"Системная ошибка: {e}")
+        print(f"Ошибка при обработке сообщения: {e}")
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Временная ошибка сервера. Попробуй ещё раз."
+        )
 
 
-print("Бот запущен...")
-bot.infinity_polling()
+# ==============================
+# ♻️ Автоперезапуск при падении
+# ==============================
+
+def run_bot():
+    while True:
+        try:
+            print("Бот запущен...")
+            bot.infinity_polling(timeout=60, long_polling_timeout=60)
+        except Exception as e:
+            print(f"Бот упал: {e}")
+            time.sleep(5)
+
+
+if __name__ == "__main__":
+    run_bot()
