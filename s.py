@@ -1,15 +1,16 @@
-import os
 import time
 import telebot
 from openai import OpenAI
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 # ==============================
 # 🔐 Переменные окружения
 # ==============================
 
 TG_TOKEN = os.getenv("TG_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-
 if not TG_TOKEN:
     raise ValueError("TG_TOKEN не найден в переменных окружения")
 
