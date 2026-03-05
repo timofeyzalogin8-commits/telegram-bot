@@ -44,7 +44,7 @@ SYSTEM_PROMPT = {
     "content": "Ты полезный, дружелюбный Telegram-бот. Отвечай кратко и понятно."
 }
 
-MAX_HISTORY = 10
+MAX_HISTORY = 7
 
 
 # ==============================
@@ -140,8 +140,9 @@ def handle_message(message):
         )
 
         response = client.chat.completions.create(
-            model="openai/gpt-3.5-turbo",
+            model="deepseek/deepseek-chat",
             messages=user_memory[user_id],
+            max_tokens=300
         )
 
         answer = response.choices[0].message.content
